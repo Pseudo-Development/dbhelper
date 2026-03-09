@@ -5,9 +5,15 @@ Database linter, diff management, and optimization tool.
 ## Build Commands
 
 ```bash
-cargo build                    # Build all crates
-cargo test                     # Run all tests
-cargo clippy                   # Lint all crates
+make setup                     # Install pre-commit hooks (one-time)
+make build                     # Build all crates
+make check                     # Type-check without codegen (faster)
+make test                      # Run all tests
+make lint                      # Run fmt-check + clippy
+make fmt                       # Auto-format all code
+make clippy                    # Run clippy with -D warnings
+make pre-commit                # Run pre-commit hooks on all files
+make clean                     # Remove build artifacts
 cargo test -p dbhelper-core    # Test a single crate
 cargo run -- --help            # Run the CLI
 ```
