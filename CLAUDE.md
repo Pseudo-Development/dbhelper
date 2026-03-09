@@ -22,12 +22,15 @@ cargo run -- --help            # Run the CLI
 
 Cargo workspace with five crates:
 
-- **dbhelper-core** (`crates/dbhelper-core/`) — DB-agnostic schema representation, diff engine, lint rules, optimization suggestions
-  - `config/` — Configuration file parsing and validation (`dbhelper.toml`)
-  - `schema/` — Core type system (tables, columns, indexes, constraints, enums)
-  - `diff/` — Schema diffing engine
-  - `lint/` — Linting rules engine
-  - `optimize/` — Schema optimization suggestions
+- **dbhelper-core** (`crates/dbhelper-core/`) — DB-agnostic schema representation, diff engine, lint rules, optimization suggestions, migration generation
+  - `config/` — Configuration file parsing, validation, path resolution, discovery (`dbhelper.toml`)
+  - `schema/` — Core type system (tables, columns, indexes, constraints, enums — 30+ data types)
+  - `parser/` — SQL migration file parser (CREATE TABLE, ALTER TABLE, CREATE INDEX, CREATE TYPE, DROP TABLE)
+  - `diff/` — Schema diffing engine with cross-source conflict detection
+  - `lint/` — Pluggable linting rules engine (10 rules, configurable severity)
+  - `optimize/` — Schema optimization suggestions (7 analyzers)
+  - `migrate/` — SQL migration generation from diffs (forward + rollback, Postgres + MySQL)
+  - `error/` — Error types per subsystem (ParseError, DiffError, LintError)
 - **dbhelper-postgres** (`crates/dbhelper-postgres/`) — Postgres introspection and schema parsing (uses sqlx)
 - **dbhelper-mysql** (`crates/dbhelper-mysql/`) — MySQL introspection and schema parsing (uses sqlx)
 - **dbhelper-container** (`crates/dbhelper-container/`) — Docker container management for ephemeral test databases (uses testcontainers)
@@ -76,8 +79,8 @@ These produce SQL migration files consumed by the Rust test suite in `tests/fixt
 
 | Database | Crate             | Status |
 |----------|--------------------|--------|
-| Postgres | dbhelper-postgres  | Stub   |
-| MySQL    | dbhelper-mysql     | Stub   |
+| Postgres | dbhelper-postgres  | Stub (introspection not yet implemented)   |
+| MySQL    | dbhelper-mysql     | Stub (introspection not yet implemented)   |
 
 ## Feature Coverage
 

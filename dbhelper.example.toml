@@ -71,3 +71,21 @@ schema = "analytics"
 # [[databases.sources]]
 # orm = "raw"
 # migrations = "db/migrations"
+
+# ---------------------------------------------------------------------------
+# Lint configuration (optional)
+# ---------------------------------------------------------------------------
+
+# [lint]
+# disabled_rules = ["unbounded-text", "fk-no-action"]
+# naming_convention = "snake_case"     # or "camelCase"
+# enum_value_threshold = 20            # warn if enum has more values
+# require_timestamps = false           # require created_at/updated_at columns
+
+# ---------------------------------------------------------------------------
+# Ignore patterns (optional)
+# ---------------------------------------------------------------------------
+
+# [ignore]
+# tables = ["schema_migrations", "__drizzle_migrations"]
+# schemas = ["pg_catalog", "information_schema"]
