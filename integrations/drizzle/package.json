@@ -1,0 +1,17 @@
+{
+  "name": "dbhelper-drizzle-fixtures",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Drizzle-kit integration for generating test migration fixtures",
+  "scripts": {
+    "generate:pg": "drizzle-kit generate --dialect=postgresql --schema=src/schema/postgres.ts --out=migrations/postgres",
+    "generate:mysql": "drizzle-kit generate --dialect=mysql --schema=src/schema/mysql.ts --out=migrations/mysql",
+    "generate": "npm run generate:pg && npm run generate:mysql"
+  },
+  "devDependencies": {
+    "drizzle-kit": "^0.31.0",
+    "drizzle-orm": "^0.44.0",
+    "typescript": "^5.4.0",
+    "@types/node": "^20.0.0"
+  }
+}

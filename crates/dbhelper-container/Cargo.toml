@@ -1,0 +1,9 @@
+[package]
+name = "dbhelper-container"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+testcontainers = "0.23"
+tokio.workspace = true
+thiserror.workspace = true

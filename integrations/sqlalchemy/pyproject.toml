@@ -1,0 +1,11 @@
+[project]
+name = "dbhelper-sqlalchemy-fixtures"
+version = "0.1.0"
+description = "SQLAlchemy/Alembic integration for generating test migration fixtures"
+requires-python = ">=3.10"
+dependencies = [
+    "sqlalchemy>=2.0",
+    "alembic>=1.13",
+    "psycopg2-binary>=2.9",
+    "mysqlclient>=2.2",
+]

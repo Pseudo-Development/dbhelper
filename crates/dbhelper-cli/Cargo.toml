@@ -1,0 +1,17 @@
+[package]
+name = "dbhelper-cli"
+version.workspace = true
+edition.workspace = true
+
+[[bin]]
+name = "dbhelper"
+path = "src/main.rs"
+
+[dependencies]
+dbhelper-core = { path = "../dbhelper-core" }
+dbhelper-postgres = { path = "../dbhelper-postgres" }
+dbhelper-mysql = { path = "../dbhelper-mysql" }
+dbhelper-container = { path = "../dbhelper-container" }
+clap = { version = "4", features = ["derive"] }
+tokio.workspace = true
+serde_json.workspace = true

@@ -1,0 +1,43 @@
+# Rust
+/target/
+**/*.rs.bk
+Cargo.lock
+
+# Node (integrations/drizzle)
+node_modules/
+dist/
+*.tsbuildinfo
+
+# Python (integrations/sqlalchemy)
+__pycache__/
+*.pyc
+.venv/
+*.egg-info/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Shell/home dotfiles (leaked into worktree)
+.bash_profile
+.bashrc
+.profile
+.zprofile
+.zshrc
+.gitconfig
+.ripgreprc
+.mcp.json
+.gitmodules
+
+# Bare git objects (leaked into worktree)
+/HEAD
+/config
+/hooks
+/objects
+/refs

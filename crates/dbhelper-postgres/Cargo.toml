@@ -1,0 +1,10 @@
+[package]
+name = "dbhelper-postgres"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+dbhelper-core = { path = "../dbhelper-core" }
+sqlx = { workspace = true, features = ["postgres"] }
+tokio.workspace = true
+thiserror.workspace = true
