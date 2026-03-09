@@ -169,7 +169,7 @@ async fn run(cli: Cli) -> Result<i32, CliError> {
                 println!(
                     "  {} ({}): {} source(s) across {} schema(s)",
                     db.name,
-                    format!("{:?}", db.engine).to_lowercase(),
+                    db.engine,
                     db.sources.len(),
                     by_schema.len(),
                 );

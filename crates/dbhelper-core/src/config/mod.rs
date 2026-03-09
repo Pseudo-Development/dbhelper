@@ -3,6 +3,8 @@ use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
+use crate::lint::LintConfig;
+
 /// Top-level configuration file for dbhelper.
 ///
 /// Describes the full database landscape: which engines, databases, schemas,
@@ -16,6 +18,14 @@ pub struct Config {
 
     /// The databases managed by this project.
     pub databases: Vec<DatabaseConfig>,
+
+    /// Lint configuration (rule overrides, naming conventions, etc.).
+    #[serde(default)]
+    pub lint: LintConfig,
+
+    /// Tables and schemas to ignore during linting/optimization.
+    #[serde(default)]
+    pub ignore: IgnoreConfig,
 }
 
 fn default_output_dir() -> PathBuf {
@@ -47,6 +57,15 @@ pub enum Engine {
     Mysql,
 }
 
+impl std::fmt::Display for Engine {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Engine::Postgres => write!(f, "postgres"),
+            Engine::Mysql => write!(f, "mysql"),
+        }
+    }
+}
+
 /// A single ORM migration source targeting a database.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SourceConfig {
@@ -73,6 +92,28 @@ pub enum Orm {
     Raw,
 }
 
+impl std::fmt::Display for Orm {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Orm::Drizzle => write!(f, "drizzle"),
+            Orm::Alembic => write!(f, "alembic"),
+            Orm::Raw => write!(f, "raw"),
+        }
+    }
+}
+
+/// Configuration for ignoring specific tables or schemas.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct IgnoreConfig {
+    /// Table names to skip during linting and optimization.
+    #[serde(default)]
+    pub tables: Vec<String>,
+
+    /// Schema names to skip entirely.
+    #[serde(default)]
+    pub schemas: Vec<String>,
+}
+
 impl Config {
     /// Load a config file from the given path.
     pub fn load(path: &Path) -> Result<Self, ConfigError> {
@@ -84,6 +125,47 @@ impl Config {
 
         config.validate()?;
         Ok(config)
+    }
+
+    /// Discover a `dbhelper.toml` by walking up directories from the given path.
+    ///
+    /// Starts from `start` and checks each parent directory until it finds
+    /// a `dbhelper.toml` file or reaches the filesystem root.
+    pub fn discover(start: &Path) -> Option<PathBuf> {
+        let mut dir = if start.is_file() {
+            start.parent()?.to_path_buf()
+        } else {
+            start.to_path_buf()
+        };
+
+        loop {
+            let candidate = dir.join("dbhelper.toml");
+            if candidate.is_file() {
+                return Some(candidate);
+            }
+            if !dir.pop() {
+                return None;
+            }
+        }
+    }
+
+    /// Resolve all migration paths relative to the config file's directory.
+    pub fn resolve_paths(&mut self, config_path: &Path) {
+        let base_dir = config_path.parent().unwrap_or_else(|| Path::new("."));
+
+        // Resolve output_dir
+        if self.output_dir.is_relative() {
+            self.output_dir = base_dir.join(&self.output_dir);
+        }
+
+        // Resolve migration paths
+        for db in &mut self.databases {
+            for source in &mut db.sources {
+                if source.migrations.is_relative() {
+                    source.migrations = base_dir.join(&source.migrations);
+                }
+            }
+        }
     }
 
     /// Validate the config for logical consistency.
@@ -130,6 +212,24 @@ impl Config {
         }
         map
     }
+
+    /// Check if a table should be ignored based on the ignore config.
+    pub fn is_table_ignored(&self, table_name: &str) -> bool {
+        self.ignore.tables.iter().any(|t| t == table_name)
+    }
+
+    /// Check if a schema should be ignored based on the ignore config.
+    pub fn is_schema_ignored(&self, schema_name: &str) -> bool {
+        self.ignore.schemas.iter().any(|s| s == schema_name)
+    }
+
+    /// Filter databases by name, or return all if name is None.
+    pub fn filter_databases(&self, name: Option<&str>) -> Vec<&DatabaseConfig> {
+        match name {
+            Some(n) => self.databases.iter().filter(|db| db.name == n).collect(),
+            None => self.databases.iter().collect(),
+        }
+    }
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -142,4 +242,131 @@ pub enum ConfigError {
 
     #[error("config validation error: {0}")]
     Validation(String),
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_parse_minimal_config() {
+        let toml = r#"
+            [[databases]]
+            name = "myapp"
+            engine = "postgres"
+
+            [[databases.sources]]
+            orm = "drizzle"
+            migrations = "migrations"
+        "#;
+        let config: Config = toml::from_str(toml).unwrap();
+        assert_eq!(config.databases.len(), 1);
+        assert_eq!(config.databases[0].engine, Engine::Postgres);
+    }
+
+    #[test]
+    fn test_parse_config_with_lint() {
+        let toml = r#"
+            [lint]
+            disabled_rules = ["missing-primary-key"]
+            naming_convention = "camelCase"
+            enum_value_threshold = 50
+
+            [[databases]]
+            name = "myapp"
+            engine = "postgres"
+
+            [[databases.sources]]
+            orm = "drizzle"
+            migrations = "migrations"
+        "#;
+        let config: Config = toml::from_str(toml).unwrap();
+        assert_eq!(config.lint.disabled_rules, vec!["missing-primary-key"]);
+        assert_eq!(config.lint.naming_convention, "camelCase");
+        assert_eq!(config.lint.enum_value_threshold, 50);
+    }
+
+    #[test]
+    fn test_parse_config_with_ignore() {
+        let toml = r#"
+            [ignore]
+            tables = ["schema_migrations", "__drizzle_migrations"]
+            schemas = ["pg_catalog"]
+
+            [[databases]]
+            name = "myapp"
+            engine = "postgres"
+
+            [[databases.sources]]
+            orm = "drizzle"
+            migrations = "migrations"
+        "#;
+        let config: Config = toml::from_str(toml).unwrap();
+        assert_eq!(config.ignore.tables.len(), 2);
+        assert!(config.is_table_ignored("schema_migrations"));
+        assert!(!config.is_table_ignored("users"));
+        assert!(config.is_schema_ignored("pg_catalog"));
+    }
+
+    #[test]
+    fn test_engine_display() {
+        assert_eq!(Engine::Postgres.to_string(), "postgres");
+        assert_eq!(Engine::Mysql.to_string(), "mysql");
+    }
+
+    #[test]
+    fn test_orm_display() {
+        assert_eq!(Orm::Drizzle.to_string(), "drizzle");
+        assert_eq!(Orm::Alembic.to_string(), "alembic");
+        assert_eq!(Orm::Raw.to_string(), "raw");
+    }
+
+    #[test]
+    fn test_filter_databases() {
+        let toml = r#"
+            [[databases]]
+            name = "app1"
+            engine = "postgres"
+            [[databases.sources]]
+            orm = "drizzle"
+            migrations = "m1"
+
+            [[databases]]
+            name = "app2"
+            engine = "mysql"
+            [[databases.sources]]
+            orm = "raw"
+            migrations = "m2"
+        "#;
+        let config: Config = toml::from_str(toml).unwrap();
+        assert_eq!(config.filter_databases(None).len(), 2);
+        assert_eq!(config.filter_databases(Some("app1")).len(), 1);
+        assert_eq!(config.filter_databases(Some("nonexistent")).len(), 0);
+    }
+
+    #[test]
+    fn test_discover_returns_none_for_empty() {
+        // Discovery from a non-existent path returns None
+        assert!(Config::discover(Path::new("/nonexistent/path")).is_none());
+    }
+
+    #[test]
+    fn test_resolve_paths() {
+        let toml = r#"
+            output_dir = ".dbhelper/state"
+            [[databases]]
+            name = "app"
+            engine = "postgres"
+            [[databases.sources]]
+            orm = "drizzle"
+            migrations = "drizzle/migrations"
+        "#;
+        let mut config: Config = toml::from_str(toml).unwrap();
+        config.resolve_paths(Path::new("/project/dbhelper.toml"));
+        assert_eq!(config.output_dir, PathBuf::from("/project/.dbhelper/state"));
+        assert_eq!(
+            config.databases[0].sources[0].migrations,
+            PathBuf::from("/project/drizzle/migrations")
+        );
+    }
 }
