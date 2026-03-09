@@ -1,7 +1,26 @@
 use std::path::{Path, PathBuf};
 
 use clap::{Parser, Subcommand};
-use dbhelper_core::config::Config;
+use dbhelper_core::config::{Config, ConfigError};
+
+/// CLI-level errors wrapping all sub-crate errors.
+#[derive(Debug, thiserror::Error)]
+enum CliError {
+    #[error("{0}")]
+    Config(#[from] ConfigError),
+
+    #[error("{0}")]
+    Parse(#[from] dbhelper_core::error::ParseError),
+
+    #[error("{0}")]
+    Diff(#[from] dbhelper_core::error::DiffError),
+
+    #[error("{0}")]
+    Lint(#[from] dbhelper_core::error::LintError),
+
+    #[error("I/O error: {0}")]
+    Io(#[from] std::io::Error),
+}
 
 #[derive(Parser)]
 #[command(
@@ -77,13 +96,24 @@ enum OutputFormat {
 async fn main() {
     let cli = Cli::parse();
 
+    let result = run(cli).await;
+    match result {
+        Ok(code) => std::process::exit(code),
+        Err(e) => {
+            eprintln!("Error: {e}");
+            std::process::exit(2);
+        }
+    }
+}
+
+async fn run(cli: Cli) -> Result<i32, CliError> {
     match cli.command {
         Commands::Diff {
             config,
             database,
             format: _,
         } => {
-            let cfg = load_config(&config);
+            let cfg = load_config(&config)?;
             println!(
                 "Diffing {} database(s) from {}",
                 match &database {
@@ -95,13 +125,14 @@ async fn main() {
             // TODO: for each database, parse migrations from all sources,
             // merge schemas per-schema, compare against output_dir state,
             // report diffs and cross-source conflicts
+            Ok(0)
         }
         Commands::Lint {
             config,
             database,
             format: _,
         } => {
-            let cfg = load_config(&config);
+            let cfg = load_config(&config)?;
             println!(
                 "Linting {} database(s) from {}",
                 match &database {
@@ -111,13 +142,14 @@ async fn main() {
                 config.display()
             );
             // TODO: parse migrations, build schemas, run lint rules
+            Ok(0)
         }
         Commands::Optimize {
             config,
             database,
             format: _,
         } => {
-            let cfg = load_config(&config);
+            let cfg = load_config(&config)?;
             println!(
                 "Optimizing {} database(s) from {}",
                 match &database {
@@ -127,9 +159,10 @@ async fn main() {
                 config.display()
             );
             // TODO: parse migrations, build schemas, run optimization analysis
+            Ok(0)
         }
         Commands::Check { config } => {
-            let cfg = load_config(&config);
+            let cfg = load_config(&config)?;
             println!("Config OK: {} database(s) defined", cfg.databases.len());
             for db in &cfg.databases {
                 let by_schema = Config::sources_by_schema(db);
@@ -150,20 +183,16 @@ async fn main() {
                     }
                 }
             }
+            Ok(0)
         }
         Commands::Init => {
             // TODO: generate a starter dbhelper.toml
             println!("TODO: generate dbhelper.toml");
+            Ok(0)
         }
     }
 }
 
-fn load_config(path: &Path) -> Config {
-    match Config::load(path) {
-        Ok(cfg) => cfg,
-        Err(e) => {
-            eprintln!("Error: {e}");
-            std::process::exit(2);
-        }
-    }
+fn load_config(path: &Path) -> Result<Config, CliError> {
+    Ok(Config::load(path)?)
 }
