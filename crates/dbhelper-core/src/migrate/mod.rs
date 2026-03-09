@@ -10,42 +10,43 @@ pub fn generate_forward(diff: &SchemaDiff, schema: &Schema, engine: Engine) -> V
     let mut statements = Vec::new();
 
     // Dependency ordering: enums first, then tables, then columns/indexes/constraints
-    // Phase 1: enums
-    for change in &diff.changes {
-        match change {
-            Change::AddEnum { name } => {
-                if let Some(e) = schema.enums.iter().find(|e| e.name == *name) {
-                    let values: Vec<String> = e
-                        .values
-                        .iter()
-                        .map(|v| format!("'{}'", escape(v)))
-                        .collect();
-                    statements.push(format!(
-                        "CREATE TYPE {} AS ENUM ({});",
-                        quote_ident(name, engine),
-                        values.join(", ")
-                    ));
+    // Phase 1: enums (Postgres only — MySQL uses inline ENUM column types)
+    if engine == Engine::Postgres {
+        for change in &diff.changes {
+            match change {
+                Change::AddEnum { name } => {
+                    if let Some(e) = schema.enums.iter().find(|e| e.name == *name) {
+                        let values: Vec<String> = e
+                            .values
+                            .iter()
+                            .map(|v| format!("'{}'", escape(v)))
+                            .collect();
+                        statements.push(format!(
+                            "CREATE TYPE {} AS ENUM ({});",
+                            quote_ident(name, engine),
+                            values.join(", ")
+                        ));
+                    }
                 }
-            }
-            Change::AlterEnum { name, description } => {
-                // Postgres ALTER TYPE ... ADD VALUE
-                if engine == Engine::Postgres && description.contains("added values:") {
-                    if let Some(added) = description.strip_prefix("added values: ") {
-                        let added = added.split("; ").next().unwrap_or(added);
-                        for val in added.split(", ") {
-                            statements.push(format!(
-                                "ALTER TYPE {} ADD VALUE '{}';",
-                                quote_ident(name, engine),
-                                escape(val)
-                            ));
+                Change::AlterEnum { name, description } => {
+                    if description.contains("added values:") {
+                        if let Some(added) = description.strip_prefix("added values: ") {
+                            let added = added.split("; ").next().unwrap_or(added);
+                            for val in added.split(", ") {
+                                statements.push(format!(
+                                    "ALTER TYPE {} ADD VALUE '{}';",
+                                    quote_ident(name, engine),
+                                    escape(val)
+                                ));
+                            }
                         }
                     }
                 }
+                Change::DropEnum { name } => {
+                    statements.push(format!("DROP TYPE {};", quote_ident(name, engine)));
+                }
+                _ => {}
             }
-            Change::DropEnum { name } => {
-                statements.push(format!("DROP TYPE {};", quote_ident(name, engine)));
-            }
-            _ => {}
         }
     }
 
@@ -95,13 +96,15 @@ pub fn generate_forward(diff: &SchemaDiff, schema: &Schema, engine: Engine) -> V
                     }
                 }
             }
-            Change::DropIndex { table: _, index } => {
+            Change::DropIndex { table, index } => {
                 if engine == Engine::Postgres {
                     statements.push(format!("DROP INDEX {};", quote_ident(index, engine)));
                 } else {
-                    // MySQL requires table name, but we don't have it in DropIndex
-                    // We use the table from the change
-                    statements.push(format!("DROP INDEX {};", quote_ident(index, engine)));
+                    statements.push(format!(
+                        "DROP INDEX {} ON {};",
+                        quote_ident(index, engine),
+                        quote_ident(table, engine)
+                    ));
                 }
             }
             Change::AddForeignKey { table, name } => {
@@ -198,13 +201,27 @@ pub fn generate_forward(diff: &SchemaDiff, schema: &Schema, engine: Engine) -> V
                     ));
                 }
             }
-            Change::ChangePrimaryKey { table } => {
+            Change::ChangePrimaryKey { table, old_pk_name } => {
                 if let Some(t) = schema.tables.iter().find(|t| t.name == *table) {
-                    statements.push(format!(
-                        "ALTER TABLE {} DROP CONSTRAINT {}_pkey;",
-                        quote_ident(table, engine),
-                        table
-                    ));
+                    // Drop old PK
+                    if engine == Engine::Mysql {
+                        statements.push(format!(
+                            "ALTER TABLE {} DROP PRIMARY KEY;",
+                            quote_ident(table, engine),
+                        ));
+                    } else {
+                        // Postgres: use explicit name if known, otherwise default convention
+                        let constraint_name = old_pk_name
+                            .as_deref()
+                            .map(|n| n.to_string())
+                            .unwrap_or_else(|| format!("{table}_pkey"));
+                        statements.push(format!(
+                            "ALTER TABLE {} DROP CONSTRAINT {};",
+                            quote_ident(table, engine),
+                            quote_ident(&constraint_name, engine),
+                        ));
+                    }
+                    // Add new PK
                     if let Some(pk) = &t.primary_key {
                         let cols: Vec<String> =
                             pk.columns.iter().map(|c| quote_ident(c, engine)).collect();
@@ -328,9 +345,11 @@ pub fn generate_rollback(diff: &SchemaDiff, old_schema: &Schema, engine: Engine)
                     description: "-- requires manual rollback".to_string(),
                 });
             }
-            Change::ChangePrimaryKey { table } => {
+            Change::ChangePrimaryKey { table, .. } => {
+                // For rollback, old PK name is not tracked; use None
                 reverse_changes.push(Change::ChangePrimaryKey {
                     table: table.clone(),
+                    old_pk_name: None,
                 });
             }
         }
@@ -643,17 +662,21 @@ fn generate_alter_column(
 
 fn generate_create_index(idx: &Index, table: &str, engine: Engine) -> String {
     let unique = if idx.unique { "UNIQUE " } else { "" };
-    let name = idx
-        .name
-        .as_ref()
-        .map(|n| format!("{} ", quote_ident(n, engine)))
-        .unwrap_or_default();
     let cols: Vec<String> = idx.columns.iter().map(|c| quote_ident(c, engine)).collect();
 
+    let index_name = match &idx.name {
+        Some(n) => quote_ident(n, engine),
+        None => {
+            // Synthesize a deterministic name: <table>_<col1>_<col2>_idx
+            let col_part = idx.columns.join("_");
+            quote_ident(&format!("{table}_{col_part}_idx"), engine)
+        }
+    };
+
     let mut sql = format!(
-        "CREATE {}INDEX {}ON {} ({});",
+        "CREATE {}INDEX {} ON {} ({});",
         unique,
-        name,
+        index_name,
         quote_ident(table, engine),
         cols.join(", ")
     );

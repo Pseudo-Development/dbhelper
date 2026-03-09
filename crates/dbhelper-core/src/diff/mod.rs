@@ -79,6 +79,8 @@ pub enum Change {
     },
     ChangePrimaryKey {
         table: String,
+        /// Name of the old primary key constraint (if known), for DROP.
+        old_pk_name: Option<String>,
     },
 }
 
@@ -92,7 +94,7 @@ pub fn diff(from: &Schema, to: &Schema) -> SchemaDiff {
     SchemaDiff { changes }
 }
 
-/// Detect cross-source conflicts: tables/columns defined by multiple sources.
+/// Detect cross-source conflicts: tables defined by multiple sources.
 pub fn detect_conflicts(schemas: &[(&str, &Schema)]) -> Vec<String> {
     let mut table_owners: HashMap<&str, Vec<&str>> = HashMap::new();
     for (source, schema) in schemas {
@@ -286,8 +288,10 @@ fn diff_columns(table: &str, from: &[Column], to: &[Column], changes: &mut Vec<C
 
 fn diff_primary_key(table: &str, from: &Table, to: &Table, changes: &mut Vec<Change>) {
     if from.primary_key != to.primary_key {
+        let old_pk_name = from.primary_key.as_ref().and_then(|pk| pk.name.clone());
         changes.push(Change::ChangePrimaryKey {
             table: table.to_string(),
+            old_pk_name,
         });
     }
 }
@@ -410,11 +414,10 @@ fn index_name(idx: &Index) -> String {
 fn fk_name(fk: &ForeignKey) -> String {
     fk.name.clone().unwrap_or_else(|| {
         format!(
-            "{}({}) -> {}({})",
+            "({}) -> {}({})",
             fk.columns.join(","),
             fk.referenced_table,
             fk.referenced_columns.join(","),
-            fk.on_delete
         )
     })
 }
@@ -669,7 +672,8 @@ mod tests {
         assert_eq!(
             result.changes,
             vec![Change::ChangePrimaryKey {
-                table: "users".to_string()
+                table: "users".to_string(),
+                old_pk_name: None,
             }]
         );
     }

@@ -414,7 +414,7 @@ fn format_change(change: &Change) -> String {
         Change::AlterEnum { name, description } => {
             format!("{} enum {}: {}", yellow("~"), name, description)
         }
-        Change::ChangePrimaryKey { table } => {
+        Change::ChangePrimaryKey { table, .. } => {
             format!("{} primary key on {}", yellow("~"), table)
         }
     }
