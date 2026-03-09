@@ -141,7 +141,7 @@ impl LintRule for MissingForeignKeyIndex {
     fn check(&self, schema: &Schema) -> Vec<LintWarning> {
         let mut warnings = Vec::new();
         for table in &schema.tables {
-            let indexed_cols = table_indexed_columns(table);
+            let indexed_cols = table_indexed_columns_set(table);
             for fk in &table.foreign_keys {
                 for col in &fk.columns {
                     if !indexed_cols.contains(col.as_str()) {
@@ -478,7 +478,8 @@ impl LintRule for BooleanColumnIndex {
 
 // --- Helpers ---
 
-fn table_indexed_columns(table: &Table) -> std::collections::HashSet<&str> {
+/// Returns the set of column names that are covered by at least one index or the primary key.
+pub fn table_indexed_columns_set(table: &Table) -> std::collections::HashSet<&str> {
     let mut cols = std::collections::HashSet::new();
     // Primary key columns are implicitly indexed
     if let Some(pk) = &table.primary_key {
