@@ -76,11 +76,11 @@ pub enum Orm {
 impl Config {
     /// Load a config file from the given path.
     pub fn load(path: &Path) -> Result<Self, ConfigError> {
-        let contents = std::fs::read_to_string(path)
-            .map_err(|e| ConfigError::Read(path.to_path_buf(), e))?;
+        let contents =
+            std::fs::read_to_string(path).map_err(|e| ConfigError::Read(path.to_path_buf(), e))?;
 
-        let config: Config = toml::from_str(&contents)
-            .map_err(|e| ConfigError::Parse(path.to_path_buf(), e))?;
+        let config: Config =
+            toml::from_str(&contents).map_err(|e| ConfigError::Parse(path.to_path_buf(), e))?;
 
         config.validate()?;
         Ok(config)
@@ -116,9 +116,7 @@ impl Config {
     /// For a given database, group sources by their target schema.
     /// This is how we detect potential conflicts — multiple sources
     /// targeting the same schema.
-    pub fn sources_by_schema<'a>(
-        db: &'a DatabaseConfig,
-    ) -> HashMap<String, Vec<&'a SourceConfig>> {
+    pub fn sources_by_schema<'a>(db: &'a DatabaseConfig) -> HashMap<String, Vec<&'a SourceConfig>> {
         let mut map: HashMap<String, Vec<&'a SourceConfig>> = HashMap::new();
         for source in &db.sources {
             let schema = match db.engine {

@@ -95,3 +95,15 @@ The integration generators define the full feature set dbhelper must support:
 - Use `thiserror` for error types
 - Use `serde` derive for all schema types
 - Config uses TOML format via the `toml` crate
+- **Do not suppress lint warnings** — fix them. No `#[allow(...)]`, no `#[cfg_attr(...)]` to silence clippy. If clippy or rustc warns, the code should be fixed, not the warning hidden.
+
+## Pre-commit Hooks
+
+Pre-commit hooks are managed by [prek](https://github.com/nicholasgasior/prek). They run `cargo fmt --check` and `cargo clippy` on every commit.
+
+```bash
+prek install         # Install git hooks (one-time setup)
+prek run --all-files # Run all hooks manually
+```
+
+Configuration is in `.pre-commit-config.yaml`.

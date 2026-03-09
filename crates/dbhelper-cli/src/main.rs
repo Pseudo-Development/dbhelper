@@ -4,7 +4,10 @@ use clap::{Parser, Subcommand};
 use dbhelper_core::config::Config;
 
 #[derive(Parser)]
-#[command(name = "dbhelper", about = "Database linter, diff, and optimization tool")]
+#[command(
+    name = "dbhelper",
+    about = "Database linter, diff, and optimization tool"
+)]
 struct Cli {
     #[command(subcommand)]
     command: Commands,
