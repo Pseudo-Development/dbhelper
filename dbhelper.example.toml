@@ -1,0 +1,73 @@
+# dbhelper configuration
+#
+# This file describes the database landscape for your project.
+# Run `dbhelper diff dbhelper.toml` to compare newly generated state
+# against the last known state in the output directory.
+
+# Directory where dbhelper stores compiled schema state and snapshots.
+# Relative to this config file. Defaults to ".dbhelper/state".
+output_dir = ".dbhelper/state"
+
+# ---------------------------------------------------------------------------
+# Example: Single Postgres database, two ORMs targeting different schemas
+# ---------------------------------------------------------------------------
+
+[[databases]]
+name = "myapp"
+engine = "postgres"
+# connection_url = "postgresql://user:pass@localhost:5432/myapp"  # optional, for live introspection
+
+# Drizzle manages the public schema
+[[databases.sources]]
+orm = "drizzle"
+migrations = "apps/web/drizzle/migrations"
+# schema defaults to "public" for Postgres
+
+# Alembic manages the analytics schema
+[[databases.sources]]
+orm = "alembic"
+migrations = "services/analytics/alembic/versions"
+schema = "analytics"
+
+# ---------------------------------------------------------------------------
+# Example: Two ORMs targeting the SAME schema (conflict detection)
+# ---------------------------------------------------------------------------
+
+# [[databases]]
+# name = "shared_db"
+# engine = "postgres"
+#
+# [[databases.sources]]
+# orm = "drizzle"
+# migrations = "team-a/migrations"
+# schema = "public"
+#
+# [[databases.sources]]
+# orm = "alembic"
+# migrations = "team-b/migrations"
+# schema = "public"
+# # ^ dbhelper will check for table/column name conflicts between these sources
+
+# ---------------------------------------------------------------------------
+# Example: MySQL database
+# ---------------------------------------------------------------------------
+
+# [[databases]]
+# name = "myapp_mysql"
+# engine = "mysql"
+#
+# [[databases.sources]]
+# orm = "drizzle"
+# migrations = "apps/api/drizzle/migrations"
+
+# ---------------------------------------------------------------------------
+# Example: Raw SQL migrations (no ORM)
+# ---------------------------------------------------------------------------
+
+# [[databases]]
+# name = "legacy"
+# engine = "postgres"
+#
+# [[databases.sources]]
+# orm = "raw"
+# migrations = "db/migrations"

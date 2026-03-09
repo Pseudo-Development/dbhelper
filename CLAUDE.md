@@ -17,6 +17,7 @@ cargo run -- --help            # Run the CLI
 Cargo workspace with five crates:
 
 - **dbhelper-core** (`crates/dbhelper-core/`) — DB-agnostic schema representation, diff engine, lint rules, optimization suggestions
+  - `config/` — Configuration file parsing and validation (`dbhelper.toml`)
   - `schema/` — Core type system (tables, columns, indexes, constraints, enums)
   - `diff/` — Schema diffing engine
   - `lint/` — Linting rules engine
@@ -25,6 +26,30 @@ Cargo workspace with five crates:
 - **dbhelper-mysql** (`crates/dbhelper-mysql/`) — MySQL introspection and schema parsing (uses sqlx)
 - **dbhelper-container** (`crates/dbhelper-container/`) — Docker container management for ephemeral test databases (uses testcontainers)
 - **dbhelper-cli** (`crates/dbhelper-cli/`) — CLI binary (uses clap). Binary name: `dbhelper`
+
+## Config-Driven Workflow
+
+All commands take a config file (default: `dbhelper.toml`), not ad-hoc connection strings.
+
+```bash
+dbhelper diff dbhelper.toml              # Diff all databases
+dbhelper diff dbhelper.toml --database myapp  # Diff one database
+dbhelper lint dbhelper.toml              # Lint all databases
+dbhelper check dbhelper.toml             # Validate config
+```
+
+The config file defines the full database landscape:
+- **Databases** — engine type (postgres/mysql), logical name
+- **Sources** — ORM type (drizzle/alembic/raw), migration path, target schema
+- **Output dir** — where computed state is stored for diffing
+
+Key design points:
+- Multiple ORMs can target the same database/schema (conflict detection)
+- Multiple ORMs can target different schemas in the same database
+- Migrations may or may not be schema-qualified (defaults to `public` on PG)
+- `diff` compares newly parsed migration state against last state in `output_dir`
+
+See `dbhelper.example.toml` for the config format.
 
 ## Integration Sub-packages
 
@@ -69,3 +94,4 @@ The integration generators define the full feature set dbhelper must support:
 - Dialect crates convert DB-specific schemas into core types
 - Use `thiserror` for error types
 - Use `serde` derive for all schema types
+- Config uses TOML format via the `toml` crate
